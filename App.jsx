@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, PlusCircle, Phone, MapPin, PawPrint, X, Camera, Loader2, CheckCircle2, Trash2, Edit3, ShieldCheck } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
-// ⚙️ Credenciais do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDakLTDxIpYx0dIvvdqx...",
   authDomain: "amigo-do-igor.firebaseapp.com",
@@ -23,16 +22,13 @@ export default function App() {
   const [pets, setPets] = useState([]);
   const [activeTab, setActiveTab] = useState('adoption');
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Modal de Pet (Cadastro/Edição)
   const [isPetModalOpen, setIsPetModalOpen] = useState(false);
   const [editingPetId, setEditingPetId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   
-  // Formulário do Pet e dados do Morador
   const [petFormData, setPetFormData] = useState({
     name: '',
     type: 'dog',
@@ -43,39 +39,33 @@ export default function App() {
     contact: ''
   });
 
-  // Autenticação anónima segura
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
         try {
           await signInAnonymously(auth);
-        } catch (error) {
-          console.error("Erro na autenticação anónima:", error);
+        } catch (e) {
+          console.error("Auth error:", e);
         }
-      } else {
-        setCurrentUser(user);
       }
     });
-    return () => unsubscribe();
   }, []);
 
-  // Buscar pets do Firestore em tempo real
   useEffect(() => {
     try {
       const q = query(collection(db, "pets"));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const petList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        // Ordena para mostrar os mais recentes primeiro
-        petList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         setPets(petList);
+      }, (error) => {
+        console.error("Erro ao escutar Firestore:", error);
       });
       return () => unsubscribe();
     } catch (e) {
-      console.error("Erro ao carregar pets:", e);
+      console.error("Erro no q:", e);
     }
   }, []);
 
-  // Tratar Seleção de Foto
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -88,7 +78,6 @@ export default function App() {
     }
   };
 
-  // Salvar ou Editar Pet e Publicar Instantaneamente
   const handleSubmitPet = async (e) => {
     e.preventDefault();
     if (!petFormData.name || !petFormData.ownerName || !petFormData.neighborhood || !petFormData.contact) {
@@ -100,35 +89,27 @@ export default function App() {
     try {
       const finalImageUrl = previewUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=400';
 
+      const petPayload = {
+        name: petFormData.name,
+        type: petFormData.type,
+        status: petFormData.status,
+        description: petFormData.description,
+        ownerName: petFormData.ownerName,
+        neighborhood: petFormData.neighborhood,
+        contact: petFormData.contact,
+        image: finalImageUrl,
+        isCompleted: false,
+        createdAt: Date.now()
+      };
+
       if (editingPetId) {
-        await updateDoc(doc(db, "pets", editingPetId), {
-          name: petFormData.name.trim(),
-          type: petFormData.type,
-          status: petFormData.status,
-          description: petFormData.description.trim(),
-          ownerName: petFormData.ownerName.trim(),
-          neighborhood: petFormData.neighborhood.trim(),
-          contact: petFormData.contact.trim(),
-          image: finalImageUrl,
-          updatedAt: serverTimestamp()
-        });
+        await updateDoc(doc(db, "pets", editingPetId), petPayload);
+        alert('Anúncio atualizado com sucesso!');
       } else {
-        await addDoc(collection(db, "pets"), {
-          name: petFormData.name.trim(),
-          type: petFormData.type,
-          status: petFormData.status,
-          description: petFormData.description.trim(),
-          ownerName: petFormData.ownerName.trim(),
-          neighborhood: petFormData.neighborhood.trim(),
-          contact: petFormData.contact.trim(),
-          image: finalImageUrl,
-          userId: currentUser?.uid || 'anon',
-          isCompleted: false,
-          createdAt: serverTimestamp()
-        });
+        await addDoc(collection(db, "pets"), petPayload);
+        alert('Animal publicado com sucesso!');
       }
 
-      // Fecha o modal e limpa o formulário imediatamente para mostrar publicado
       setIsPetModalOpen(false);
       setEditingPetId(null);
       setPetFormData({
@@ -143,34 +124,31 @@ export default function App() {
       setPreviewUrl('');
       setImageFile(null);
     } catch (error) {
-      console.error("Erro detalhado ao salvar pet:", error);
-      alert('Erro ao salvar o anúncio. Verifique sua conexão.');
+      console.error("Erro crítico ao salvar:", error);
+      alert('Erro ao salvar no banco de dados: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Marcar como Adotado / Encontrado
   const handleToggleCompleted = async (pet) => {
     try {
       await updateDoc(doc(db, "pets", pet.id), { isCompleted: !pet.isCompleted });
-    } catch (error) {
-      console.error("Erro ao alterar status:", error);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  // Excluir Pet
   const handleDeletePet = async (pet) => {
-    if (window.confirm("Deseja realmente excluir este anúncio do aplicativo?")) {
+    if (window.confirm("Deseja realmente excluir este anúncio?")) {
       try {
         await deleteDoc(doc(db, "pets", pet.id));
-      } catch (error) {
-        console.error("Erro ao excluir:", error);
+      } catch (e) {
+        console.error(e);
       }
     }
   };
 
-  // Abrir Modal de Edição
   const handleOpenEditModal = (pet) => {
     setEditingPetId(pet.id);
     setPetFormData({
@@ -362,7 +340,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* MODAL DE CADASTRO / EDIÇÃO */}
       {isPetModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -467,4 +444,11 @@ export default function App() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-sm disabled:opacity-50 flex items-center justify-center space-x-2"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>{editingPetId ? 'Salvar Alterações' : 'Publicar Anúncio'}</span>}
-              </bu
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
