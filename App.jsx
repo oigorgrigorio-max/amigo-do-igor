@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, PlusCircle, Phone, MapPin, PawPrint, X, Camera, Loader2, CheckCircle2, Trash2, Edit3, ShieldCheck } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
-import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 // ⚙️ Credenciais do Firebase
 const firebaseConfig = {
@@ -43,7 +43,7 @@ export default function App() {
     contact: ''
   });
 
-  // Autenticação automática anónima para garantir acesso imediato ao Firestore
+  // Autenticação anónima segura
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -65,6 +65,8 @@ export default function App() {
       const q = query(collection(db, "pets"));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const petList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Ordena para mostrar os mais recentes primeiro
+        petList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         setPets(petList);
       });
       return () => unsubscribe();
@@ -86,36 +88,47 @@ export default function App() {
     }
   };
 
-  // Salvar ou Editar Pet
+  // Salvar ou Editar Pet e Publicar Instantaneamente
   const handleSubmitPet = async (e) => {
     e.preventDefault();
     if (!petFormData.name || !petFormData.ownerName || !petFormData.neighborhood || !petFormData.contact) {
-      alert('Por favor, preencha todos os campos obrigatórios (Nome do Pet, Seu Nome, Bairro e WhatsApp)!');
+      alert('Por favor, preencha todos os campos obrigatórios!');
       return;
     }
 
     setLoading(true);
     try {
-      let finalImageUrl = previewUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=400';
+      const finalImageUrl = previewUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=400';
 
       if (editingPetId) {
         await updateDoc(doc(db, "pets", editingPetId), {
-          ...petFormData,
+          name: petFormData.name.trim(),
+          type: petFormData.type,
+          status: petFormData.status,
+          description: petFormData.description.trim(),
+          ownerName: petFormData.ownerName.trim(),
+          neighborhood: petFormData.neighborhood.trim(),
+          contact: petFormData.contact.trim(),
           image: finalImageUrl,
-          updatedAt: new Date()
+          updatedAt: serverTimestamp()
         });
-        alert('Anúncio atualizado com sucesso!');
       } else {
         await addDoc(collection(db, "pets"), {
-          ...petFormData,
+          name: petFormData.name.trim(),
+          type: petFormData.type,
+          status: petFormData.status,
+          description: petFormData.description.trim(),
+          ownerName: petFormData.ownerName.trim(),
+          neighborhood: petFormData.neighborhood.trim(),
+          contact: petFormData.contact.trim(),
           image: finalImageUrl,
           userId: currentUser?.uid || 'anon',
           isCompleted: false,
-          createdAt: new Date()
+          createdAt: serverTimestamp()
         });
-        alert('Animal cadastrado com sucesso!');
       }
 
+      // Fecha o modal e limpa o formulário imediatamente para mostrar publicado
       setIsPetModalOpen(false);
       setEditingPetId(null);
       setPetFormData({
@@ -128,9 +141,10 @@ export default function App() {
         contact: ''
       });
       setPreviewUrl('');
+      setImageFile(null);
     } catch (error) {
-      console.error("Erro ao salvar pet:", error);
-      alert('Erro ao salvar o anúncio.');
+      console.error("Erro detalhado ao salvar pet:", error);
+      alert('Erro ao salvar o anúncio. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -196,6 +210,7 @@ export default function App() {
               setEditingPetId(null);
               setPetFormData({ name: '', type: 'dog', status: 'adoption', description: '', ownerName: '', neighborhood: '', contact: '' });
               setPreviewUrl('');
+              setImageFile(null);
               setIsPetModalOpen(true);
             }}
             className="bg-white text-emerald-700 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1 shadow-sm hover:bg-emerald-50 transition"
@@ -452,11 +467,4 @@ export default function App() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-sm disabled:opacity-50 flex items-center justify-center space-x-2"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>{editingPetId ? 'Salvar Alterações' : 'Publicar Anúncio'}</span>}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+              </bu
