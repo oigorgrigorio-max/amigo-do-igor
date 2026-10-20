@@ -61,12 +61,12 @@ export default function App() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             setUserProfile(userDoc.data());
-          } else if (user.displayName) {
-            // Se entrou pelo Google e não tem perfil criado ainda, cria um básico
+          } else {
+            // Se entrou pelo Google e não tem perfil no Firestore, cria um básico
             const basicProfile = {
               uid: user.uid,
               email: user.email,
-              fullName: user.displayName,
+              fullName: user.displayName || 'Morador de Neves',
               neighborhood: 'Ribeirão das Neves',
               phone: '(31) 99999-9999',
               createdAt: new Date()
@@ -106,7 +106,6 @@ export default function App() {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // Verifica se já existe perfil no Firestore
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
 
@@ -114,7 +113,7 @@ export default function App() {
         const defaultProfile = {
           uid: user.uid,
           email: user.email,
-          fullName: user.name || user.displayName || 'Morador de Neves',
+          fullName: user.displayName || 'Morador de Neves',
           neighborhood: 'Ribeirão das Neves',
           phone: '(31) 99999-9999',
           createdAt: new Date()
@@ -122,7 +121,6 @@ export default function App() {
         await setDoc(userDocRef, defaultProfile);
         setUserProfile(defaultProfile);
       }
-      alert('Login com Google realizado com sucesso!');
     } catch (error) {
       console.error("Erro no login com Google:", error);
       alert('Erro ao entrar com Google: ' + error.message);
@@ -188,6 +186,7 @@ export default function App() {
     signOut(auth);
   };
 
+  // Tratar Seleção de Foto
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -200,6 +199,7 @@ export default function App() {
     }
   };
 
+  // Salvar ou Editar Pet
   const handleSubmitPet = async (e) => {
     e.preventDefault();
     if (!petFormData.name) {
@@ -223,9 +223,9 @@ export default function App() {
           ...petFormData,
           image: finalImageUrl,
           userId: currentUser.uid,
-          ownerName: userProfile?.fullName || 'Morador de Neves',
+          ownerName: userProfile?.fullName || currentUser.displayName || 'Morador de Neves',
           neighborhood: userProfile?.neighborhood || 'Ribeirão das Neves',
-          contact: userProfile?.phone || '',
+          contact: userProfile?.phone || '(31) 99999-9999',
           isCompleted: false,
           createdAt: new Date()
         });
@@ -244,6 +244,7 @@ export default function App() {
     }
   };
 
+  // Marcar como Adotado / Encontrado
   const handleToggleCompleted = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode alterar a situação dele.");
@@ -257,6 +258,7 @@ export default function App() {
     }
   };
 
+  // Excluir Pet
   const handleDeletePet = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode excluí-lo.");
@@ -272,6 +274,7 @@ export default function App() {
     }
   };
 
+  // Abrir Modal de Edição
   const handleOpenEditModal = (pet) => {
     setEditingPetId(pet.id);
     setPetFormData({
@@ -291,7 +294,7 @@ export default function App() {
     return matchesTab && matchesSearch;
   });
 
-  // 🔒 TELA DE REGISTRO / LOGIN (Com Google e E-mail/Senha)
+  // 🔒 TELA DE REGISTRO / LOGIN (Bloqueia até autenticar)
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans text-slate-800">
@@ -311,8 +314,8 @@ export default function App() {
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 {isRegistering 
-                  ? 'Escolha uma forma rápida de entrar ou preencha seus dados abaixo.' 
-                  : 'Entre com sua conta para gerenciar os animais.'}
+                  ? 'Entre com sua conta Google ou preencha seus dados abaixo para ver e adotar animais.' 
+                  : 'Digite seu e-mail e senha para acessar o aplicativo.'}
               </p>
             </div>
 
@@ -498,7 +501,4 @@ export default function App() {
                 activeTab === 'adoption' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-slate-600 border border-slate-200'
               }`}
             >
-              🐶 Adoção Responsável
-            </button>
-            <button
-              
+            
