@@ -91,6 +91,15 @@ export default function App() {
     e.preventDefault();
     setLoading(true);
 
+    const cleanEmail = authEmail.trim().toLowerCase();
+    const cleanPassword = authPassword.trim();
+
+    if (cleanPassword.length < 6) {
+      alert('A senha precisa ter no mínimo 6 dígitos! (Pode ser só números, ex: 123456)');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isRegistering) {
         if (!profileData.fullName || !profileData.neighborhood || !profileData.phone) {
@@ -99,12 +108,12 @@ export default function App() {
           return;
         }
 
-        const res = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        const res = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPassword);
         
-        // Salva os dados do morador de Neves no banco
+        // Salva os dados do morador no Firestore
         const userDocData = {
           uid: res.user.uid,
-          email: authEmail,
+          email: cleanEmail,
           fullName: profileData.fullName,
           neighborhood: profileData.neighborhood,
           phone: profileData.phone,
@@ -115,11 +124,23 @@ export default function App() {
         setUserProfile(userDocData);
         alert('Conta criada com sucesso! Seja bem-vindo(a).');
       } else {
-        await signInWithEmailAndPassword(auth, authEmail, authPassword);
+        await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
       }
     } catch (error) {
       console.error("Erro de Autenticação:", error);
-      alert('Erro ao processar: ' + error.message);
+      
+      let msg = error.message;
+      if (error.code === 'auth/email-already-in-use') {
+        msg = 'Este e-mail já está cadastrado! Clique em "Já possui cadastro?" para entrar.';
+      } else if (error.code === 'auth/weak-password') {
+        msg = 'A senha deve ter pelo menos 6 dígitos (números ou letras).';
+      } else if (error.code === 'auth/operation-not-allowed') {
+        msg = 'O método E-mail/senha ainda não foi ativado no painel do Firebase Console.';
+      } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        msg = 'E-mail ou senha incorretos.';
+      }
+
+      alert('Atenção: ' + msg);
     } finally {
       setLoading(false);
     }
@@ -318,11 +339,11 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Criar Senha *</label>
+                <label className="block font-medium text-slate-700 mb-1">Criar Senha * (Mín. 6 números)</label>
                 <input 
                   type="password" 
                   required
-                  placeholder="••••••••"
+                  placeholder="Ex: 123456"
                   value={authPassword}
                   onChange={e => setAuthPassword(e.target.value)}
                   className="w-full p-2.5 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
@@ -477,22 +498,4 @@ export default function App() {
                           title="Editar Anúncio"
                           className="bg-white/90 hover:bg-emerald-600 hover:text-white text-slate-700 p-1.5 rounded-full shadow-sm transition"
                         >
-                          <Edit3 className="h-3.5 w-3.5" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeletePet(pet)}
-                          title="Excluir Anúncio"
-                          className="bg-white/90 hover:bg-red-500 hover:text-white text-slate-700 p-1.5 rounded-full shadow-sm transition"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 space-y-2">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-800">{pet.name}</h3>
-                      <p className="text-[11px] text-slate-500 flex items-center mt-0.5">
-                        <MapPin className="h-3 w-3 mr-1 text-slate-400" />
-                        {pet.neighborhood} • <span className="ml-1
+                          <E
