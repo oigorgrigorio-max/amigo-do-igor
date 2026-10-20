@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
-// ⚙️ Suas credenciais do Firebase
+// ⚙️ Credenciais do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDakLTDxIpYx0dIvvdqx...",
   authDomain: "amigo-do-igor.firebaseapp.com",
@@ -25,13 +25,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('adoption');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Estado de Autenticação e Usuário
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(true);
 
-  // Formulário de Cadastro / Login do Usuário
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [profileData, setProfileData] = useState({
@@ -40,7 +38,6 @@ export default function App() {
     phone: ''
   });
 
-  // Modal de Pet (Cadastro/Edição)
   const [isPetModalOpen, setIsPetModalOpen] = useState(false);
   const [editingPetId, setEditingPetId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -52,7 +49,6 @@ export default function App() {
     description: ''
   });
 
-  // Monitorar estado da Autenticação do Usuário e carregar o perfil
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -62,7 +58,6 @@ export default function App() {
           if (userDoc.exists()) {
             setUserProfile(userDoc.data());
           } else {
-            // Se entrou pelo Google e não tem perfil no Firestore, cria um básico
             const basicProfile = {
               uid: user.uid,
               email: user.email,
@@ -84,7 +79,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Buscar pets do Firestore em tempo real
   useEffect(() => {
     if (!currentUser) return;
     try {
@@ -99,7 +93,6 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Login com Google
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
@@ -129,7 +122,6 @@ export default function App() {
     }
   };
 
-  // Login e Cadastro com E-mail e Senha
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -186,7 +178,6 @@ export default function App() {
     signOut(auth);
   };
 
-  // Tratar Seleção de Foto
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -199,7 +190,6 @@ export default function App() {
     }
   };
 
-  // Salvar ou Editar Pet
   const handleSubmitPet = async (e) => {
     e.preventDefault();
     if (!petFormData.name) {
@@ -244,7 +234,6 @@ export default function App() {
     }
   };
 
-  // Marcar como Adotado / Encontrado
   const handleToggleCompleted = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode alterar a situação dele.");
@@ -258,7 +247,6 @@ export default function App() {
     }
   };
 
-  // Excluir Pet
   const handleDeletePet = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode excluí-lo.");
@@ -274,7 +262,6 @@ export default function App() {
     }
   };
 
-  // Abrir Modal de Edição
   const handleOpenEditModal = (pet) => {
     setEditingPetId(pet.id);
     setPetFormData({
@@ -294,7 +281,7 @@ export default function App() {
     return matchesTab && matchesSearch;
   });
 
-  // 🔒 TELA DE REGISTRO / LOGIN (Bloqueia até autenticar)
+  // 🔒 TELA DE LOGIN OBRIGATÓRIA
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans text-slate-800">
@@ -432,7 +419,7 @@ export default function App() {
     );
   }
 
-  // 📱 APLICATIVO LIBERADO
+  // 📱 PAINEL PRINCIPAL (Após entrar)
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
       <header className="bg-emerald-600 text-white shadow-lg sticky top-0 z-40">
@@ -501,4 +488,18 @@ export default function App() {
                 activeTab === 'adoption' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-slate-600 border border-slate-200'
               }`}
             >
-            
+              🐶 Adoção Responsável
+            </button>
+            <button
+              onClick={() => setActiveTab('lost')}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+                activeTab === 'lost' ? 'bg-amber-500 text-white shadow-xs' : 'bg-white text-slate-600 border border-slate-200'
+              }`}
+            >
+              🔍 Animais Perdidos
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {filteredPets
