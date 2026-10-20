@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, PlusCircle, Phone, MapPin, PawPrint, X, Camera, Loader2, CheckCircle2, Trash2, LogOut, User, Edit3, ShieldCheck } from 'lucide-react';
+import { Search, PlusCircle, Phone, MapPin, PawPrint, X, Camera, Loader2, CheckCircle2, Trash2, LogOut, Edit3, ShieldCheck } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 
-// ⚙️ Suas credenciais do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDakLTDxIpYx0dIvvdqx...",
   authDomain: "amigo-do-igor.firebaseapp.com",
@@ -23,14 +22,11 @@ export default function App() {
   const [pets, setPets] = useState([]);
   const [activeTab, setActiveTab] = useState('adoption');
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Estado de Autenticação e Usuário
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(true);
 
-  // Formulário de Cadastro / Login do Usuário
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [profileData, setProfileData] = useState({
@@ -39,7 +35,6 @@ export default function App() {
     phone: ''
   });
 
-  // Modal de Pet (Cadastro/Edição)
   const [isPetModalOpen, setIsPetModalOpen] = useState(false);
   const [editingPetId, setEditingPetId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -51,7 +46,6 @@ export default function App() {
     description: ''
   });
 
-  // Monitorar estado da Autenticação do Usuário e carregar o perfil
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -71,7 +65,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Buscar pets do Firestore em tempo real
   useEffect(() => {
     if (!currentUser) return;
     try {
@@ -86,7 +79,6 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Login e Cadastro do Usuário
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -101,7 +93,6 @@ export default function App() {
 
         const res = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
         
-        // Salva os dados do morador de Neves no banco
         const userDocData = {
           uid: res.user.uid,
           email: authEmail,
@@ -113,13 +104,13 @@ export default function App() {
 
         await setDoc(doc(db, "users", res.user.uid), userDocData);
         setUserProfile(userDocData);
-        alert('Conta criada com sucesso! Seja bem-vindo(a).');
+        alert('Conta criada com sucesso!');
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
     } catch (error) {
       console.error("Erro de Autenticação:", error);
-      alert('Erro ao processar: ' + (error.message.includes('email-already-in-use') ? 'Este e-mail já está cadastrado!' : 'Verifique os dados informados.'));
+      alert('Erro ao processar: verifique os dados informados.');
     } finally {
       setLoading(false);
     }
@@ -129,7 +120,6 @@ export default function App() {
     signOut(auth);
   };
 
-  // Tratar Seleção de Foto
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -142,7 +132,6 @@ export default function App() {
     }
   };
 
-  // Salvar ou Editar Pet
   const handleSubmitPet = async (e) => {
     e.preventDefault();
     if (!petFormData.name) {
@@ -155,7 +144,6 @@ export default function App() {
       let finalImageUrl = previewUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=400';
 
       if (editingPetId) {
-        // Atualiza anúncio existente
         await updateDoc(doc(db, "pets", editingPetId), {
           ...petFormData,
           image: finalImageUrl,
@@ -163,7 +151,6 @@ export default function App() {
         });
         alert('Anúncio atualizado com sucesso!');
       } else {
-        // Cria novo anúncio vinculando ao perfil do usuário cadastrado
         await addDoc(collection(db, "pets"), {
           ...petFormData,
           image: finalImageUrl,
@@ -189,7 +176,6 @@ export default function App() {
     }
   };
 
-  // Marcar como Adotado / Encontrado
   const handleToggleCompleted = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode alterar a situação dele.");
@@ -203,14 +189,13 @@ export default function App() {
     }
   };
 
-  // Excluir Pet
   const handleDeletePet = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode excluí-lo.");
       return;
     }
 
-    if (window.confirm("Deseja realmente excluir este anúncio do aplicativo?")) {
+    if (window.confirm("Deseja realmente excluir este anúncio?")) {
       try {
         await deleteDoc(doc(db, "pets", pet.id));
       } catch (error) {
@@ -219,7 +204,6 @@ export default function App() {
     }
   };
 
-  // Abrir Modal de Edição
   const handleOpenEditModal = (pet) => {
     setEditingPetId(pet.id);
     setPetFormData({
@@ -239,7 +223,6 @@ export default function App() {
     return matchesTab && matchesSearch;
   });
 
-  // 🔒 TELA DE REGISTRO / LOGIN (Bloqueia até cadastrar)
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans text-slate-800">
@@ -259,7 +242,7 @@ export default function App() {
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 {isRegistering 
-                  ? 'Preencha seus dados para poder cadastrar, adotar e salvar animais na cidade.' 
+                  ? 'Preencha seus dados para poder ver, cadastrar e adotar animais na cidade.' 
                   : 'Digite seu e-mail e senha para acessar o aplicativo.'}
               </p>
             </div>
@@ -342,6 +325,7 @@ export default function App() {
 
             <div className="text-center pt-3 border-t">
               <button 
+                type="button"
                 onClick={() => setIsRegistering(!isRegistering)}
                 className="text-xs text-emerald-700 font-bold underline"
               >
@@ -354,10 +338,8 @@ export default function App() {
     );
   }
 
-  // 📱 APLICATIVO LIBERADO (Após o usuário se cadastrar e logar)
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
-      {/* Cabeçalho */}
       <header className="bg-emerald-600 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -393,9 +375,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Conteúdo Principal */}
       <main className="max-w-4xl mx-auto px-4 pt-5 space-y-5">
-        {/* Banner do Morador Logado */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-5 text-white shadow-md flex justify-between items-center">
           <div>
             <span className="text-xs text-emerald-200 font-semibold uppercase tracking-wider">Usuário Conectado</span>
@@ -407,7 +387,6 @@ export default function App() {
           <ShieldCheck className="h-10 w-10 text-emerald-200 opacity-80" />
         </div>
 
-        {/* Busca e Filtros */}
         <div className="space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
@@ -440,7 +419,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Lista de Pets Cadastrados */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredPets.length === 0 ? (
             <div className="col-span-full text-center py-10 bg-white rounded-2xl border border-slate-200 p-6">
@@ -476,7 +454,6 @@ export default function App() {
                       </span>
                     )}
 
-                    {/* Botões de Ação EXCLUSIVOS de quem cadastrou o pet */}
                     {isMyPet && (
                       <div className="absolute top-3 left-3 flex space-x-1.5">
                         <button 
@@ -494,4 +471,130 @@ export default function App() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                  
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-2">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800">{pet.name}</h3>
+                      <p className="text-[11px] text-slate-500 flex items-center mt-0.5">
+                        <MapPin className="h-3 w-3 mr-1 text-slate-400" />
+                        {pet.neighborhood} • <span className="ml-1 text-slate-400">Por: {pet.ownerName || 'Morador'}</span>
+                      </p>
+                    </div>
+
+                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                      {pet.description}
+                    </p>
+
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      {!pet.isCompleted && pet.contact && (
+                        <a 
+                          href={`https://wa.me/55${pet.contact.replace(/\D/g, '')}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition"
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                          <span>Falar com Responsável no WhatsApp</span>
+                        </a>
+                      )}
+
+                      {isMyPet && (
+                        <button
+                          onClick={() => handleToggleCompleted(pet)}
+                          className={`w-full font-semibold py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition ${
+                            pet.isCompleted ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>
+                            {pet.isCompleted 
+                              ? 'Reabrir Anúncio' 
+                              : (pet.status === 'adoption' ? 'Marcar como Já Adotado' : 'Marcar como Encontrado')}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </main>
+
+      {isPetModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-base font-bold text-slate-800">
+                {editingPetId ? 'Editar Anúncio' : 'Cadastrar Pet'}
+              </h3>
+              <button onClick={() => setIsPetModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPet} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Nome do Pet *</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: Thor, Mel..."
+                  value={petFormData.name}
+                  onChange={e => setPetFormData({...petFormData, name: e.target.value})}
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Situação</label>
+                <select 
+                  value={petFormData.status}
+                  onChange={e => setPetFormData({...petFormData, status: e.target.value})}
+                  className="w-full p-2.5 border rounded-xl outline-none"
+                >
+                  <option value="adoption">Para Adoção</option>
+                  <option value="lost">Perdido</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Foto do Pet (Galeria)</label>
+                <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer bg-emerald-50 hover:bg-emerald-100 transition text-emerald-700 font-medium">
+                  <Camera className="h-4 w-4 mr-2" />
+                  <span>{imageFile ? imageFile.name : "Escolher foto do celular"}</span>
+                  <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                </label>
+                {previewUrl && (
+                  <img src={previewUrl} alt="Pré-visualização" className="mt-2 h-32 w-full object-cover rounded-xl border" />
+                )}
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Descrição</label>
+                <textarea 
+                  rows="3"
+                  placeholder="História do animal, temperamento, vacinas..."
+                  value={petFormData.description}
+                  onChange={e => setPetFormData({...petFormData, description: e.target.value})}
+                  className="w-full p-2.5 border rounded-xl outline-none"
+                ></textarea>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-sm disabled:opacity-50 flex items-center justify-center space-x-2"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>{editingPetId ? 'Salvar Alterações' : 'Publicar Anúncio'}</span>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
