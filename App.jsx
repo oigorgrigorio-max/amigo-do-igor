@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Search, PlusCircle, Phone, MapPin, PawPrint, X } from 'lucide-react';
+import { Heart, Search, PlusCircle, Phone, MapPin, PawPrint, X, Camera, Loader2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, query } from 'firebase/firestore';
 
-// ⚙️ Suas credenciais reais do Firebase
+// ⚙️ Suas credenciais do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDakLTDxIpYx0dIvvdqx...",
   authDomain: "amigo-do-igor.firebaseapp.com",
@@ -23,6 +23,8 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
 
   // Estado do Formulário
   const [formData, setFormData] = useState({
@@ -31,8 +33,7 @@ export default function App() {
     status: 'adoption',
     neighborhood: '',
     description: '',
-    contact: '',
-    image: ''
+    contact: ''
   });
 
   // Buscar pets do Firebase em tempo real
@@ -49,7 +50,20 @@ export default function App() {
     }
   }, []);
 
-  // Enviar cadastro para o banco
+  // Processar imagem da galeria e converter para URL de visualização/armazenamento
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Enviar cadastro para o banco de dados
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.neighborhood || !formData.contact) {
@@ -59,16 +73,23 @@ export default function App() {
 
     setLoading(true);
     try {
+      let finalImageUrl = previewUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=400';
+
+      // Salva os dados no Cloud Firestore sem precisar do Firebase Storage
       await addDoc(collection(db, "pets"), {
         ...formData,
+        image: finalImageUrl,
         createdAt: new Date()
       });
+
       setIsModalOpen(false);
-      setFormData({ name: '', type: 'dog', status: 'adoption', neighborhood: '', description: '', contact: '', image: '' });
-      alert('Animal cadastrado com sucesso! Já está visível na plataforma.');
+      setFormData({ name: '', type: 'dog', status: 'adoption', neighborhood: '', description: '', contact: '' });
+      setImageFile(null);
+      setPreviewUrl('');
+      alert('Animal cadastrado com sucesso!');
     } catch (error) {
       console.error("Erro ao cadastrar:", error);
-      alert('Erro ao salvar. Verifique se ativou o Firestore Database em modo de teste.');
+      alert('Erro ao salvar o cadastro.');
     } finally {
       setLoading(false);
     }
@@ -232,6 +253,86 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">Situação</label>
+                  <select 
+                    value={formData.status}
+                    onChange={e => setFormData({...formData, status: e.target.value})}
+                    className="w-full p-2.5 border rounded-xl outline-none"
+                  >
+                    <option value="adoption">Para Adoção</option>
+                    <option value="lost">Perdido</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Bairro em Neves *</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: Justinópolis, Sevilha"
+                    value={formData.neighborhood}
+                    onChange={e => setFormData({...formData, neighborhood: e.target.value})}
+                    className="w-full p-2.5 border rounded-xl outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">WhatsApp de Contato *</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="(31) 99999-9999"
+                  value={formData.contact}
+                  onChange={e => setFormData({...formData, contact: e.target.value})}
+                  className="w-full p-2.5 border rounded-xl outline-none"
+                />
+              </div>
+
+              {/* Botão de Anexo de Foto do Celular */}
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Foto do Pet (Galeria)</label>
+                <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer bg-emerald-50 hover:bg-emerald-100 transition text-emerald-700 font-medium">
+                  <Camera className="h-5 w-5 mr-2" />
+                  <span>{imageFile ? imageFile.name : "Escolher foto do celular"}</span>
+                  <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                </label>
+                {previewUrl && (
+                  <img src={previewUrl} alt="Pré-visualização" className="mt-2 h-32 w-full object-cover rounded-xl border" />
+                )}
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Descrição</label>
+                <textarea 
+                  rows="3"
+                  placeholder="Detalhes sobre a história, vacinas, temperamento..."
+                  value={formData.description}
+                  onChange={e => setFormData({...formData, description: e.target.value})}
+                  className="w-full p-2.5 border rounded-xl outline-none"
+                ></textarea>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-sm disabled:opacity-50 flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>A guardar registo...</span>
+                  </>
+                ) : (
+                  <span>Salvar Cadastro</span>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ className="block font-medium text-slate-700 mb-1">Situação</label>
                   <select 
                     value={formData.status}
                     onChange={e => setFormData({...formData, status: e.target.value})}
