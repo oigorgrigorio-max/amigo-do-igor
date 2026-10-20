@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, PlusCircle, Phone, MapPin, PawPrint, X, Camera, Loader2, CheckCircle2, Trash2, LogOut, Edit3, ShieldCheck } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 // ⚙️ Suas credenciais do Firebase
 const firebaseConfig = {
@@ -18,6 +18,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 export default function App() {
   const [pets, setPets] = useState([]);
@@ -60,6 +61,18 @@ export default function App() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             setUserProfile(userDoc.data());
+          } else if (user.displayName) {
+            // Se entrou pelo Google e não tem perfil criado ainda, cria um básico
+            const basicProfile = {
+              uid: user.uid,
+              email: user.email,
+              fullName: user.displayName,
+              neighborhood: 'Ribeirão das Neves',
+              phone: '(31) 99999-9999',
+              createdAt: new Date()
+            };
+            await setDoc(doc(db, "users", user.uid), basicProfile);
+            setUserProfile(basicProfile);
           }
         } catch (e) {
           console.error("Erro ao buscar perfil:", e);
@@ -86,7 +99,39 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Login e Cadastro do Usuário
+  // Login com Google
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // Verifica se já existe perfil no Firestore
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        const defaultProfile = {
+          uid: user.uid,
+          email: user.email,
+          fullName: user.name || user.displayName || 'Morador de Neves',
+          neighborhood: 'Ribeirão das Neves',
+          phone: '(31) 99999-9999',
+          createdAt: new Date()
+        };
+        await setDoc(userDocRef, defaultProfile);
+        setUserProfile(defaultProfile);
+      }
+      alert('Login com Google realizado com sucesso!');
+    } catch (error) {
+      console.error("Erro no login com Google:", error);
+      alert('Erro ao entrar com Google: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Login e Cadastro com E-mail e Senha
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -95,7 +140,7 @@ export default function App() {
     const cleanPassword = authPassword.trim();
 
     if (cleanPassword.length < 6) {
-      alert('A senha precisa ter no mínimo 6 dígitos! (Pode ser só números, ex: 123456)');
+      alert('A senha precisa ter no mínimo 6 caracteres!');
       setLoading(false);
       return;
     }
@@ -110,7 +155,6 @@ export default function App() {
 
         const res = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPassword);
         
-        // Salva os dados do morador no Firestore
         const userDocData = {
           uid: res.user.uid,
           email: cleanEmail,
@@ -122,24 +166,18 @@ export default function App() {
 
         await setDoc(doc(db, "users", res.user.uid), userDocData);
         setUserProfile(userDocData);
-        alert('Conta criada com sucesso! Seja bem-vindo(a).');
+        alert('Conta criada com sucesso!');
       } else {
         await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
       }
     } catch (error) {
       console.error("Erro de Autenticação:", error);
-      
       let msg = error.message;
       if (error.code === 'auth/email-already-in-use') {
         msg = 'Este e-mail já está cadastrado! Clique em "Já possui cadastro?" para entrar.';
-      } else if (error.code === 'auth/weak-password') {
-        msg = 'A senha deve ter pelo menos 6 dígitos (números ou letras).';
-      } else if (error.code === 'auth/operation-not-allowed') {
-        msg = 'O método E-mail/senha ainda não foi ativado no painel do Firebase Console.';
       } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
         msg = 'E-mail ou senha incorretos.';
       }
-
       alert('Atenção: ' + msg);
     } finally {
       setLoading(false);
@@ -150,7 +188,6 @@ export default function App() {
     signOut(auth);
   };
 
-  // Tratar Seleção de Foto
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -163,7 +200,6 @@ export default function App() {
     }
   };
 
-  // Salvar ou Editar Pet
   const handleSubmitPet = async (e) => {
     e.preventDefault();
     if (!petFormData.name) {
@@ -208,7 +244,6 @@ export default function App() {
     }
   };
 
-  // Marcar como Adotado / Encontrado
   const handleToggleCompleted = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode alterar a situação dele.");
@@ -222,7 +257,6 @@ export default function App() {
     }
   };
 
-  // Excluir Pet
   const handleDeletePet = async (pet) => {
     if (pet.userId !== currentUser.uid) {
       alert("Apenas a pessoa que cadastrou este pet pode excluí-lo.");
@@ -238,7 +272,6 @@ export default function App() {
     }
   };
 
-  // Abrir Modal de Edição
   const handleOpenEditModal = (pet) => {
     setEditingPetId(pet.id);
     setPetFormData({
@@ -258,7 +291,7 @@ export default function App() {
     return matchesTab && matchesSearch;
   });
 
-  // 🔒 TELA DE REGISTRO / LOGIN (Bloqueia até cadastrar)
+  // 🔒 TELA DE REGISTRO / LOGIN (Com Google e E-mail/Senha)
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans text-slate-800">
@@ -274,13 +307,35 @@ export default function App() {
           <div className="p-6 space-y-5">
             <div className="text-center">
               <h2 className="text-lg font-bold text-slate-800">
-                {isRegistering ? 'Cadastre-se para ter acesso ao app' : 'Entrar na sua conta'}
+                {isRegistering ? 'Cadastre-se para acessar o app' : 'Entrar na sua conta'}
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 {isRegistering 
-                  ? 'Preencha seus dados para poder ver, cadastrar e adotar animais na cidade.' 
-                  : 'Digite seu e-mail e senha para acessar o aplicativo.'}
+                  ? 'Escolha uma forma rápida de entrar ou preencha seus dados abaixo.' 
+                  : 'Entre com sua conta para gerenciar os animais.'}
               </p>
+            </div>
+
+            {/* BOTÃO DE LOGIN COM GOOGLE */}
+            <button 
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-xl border border-slate-300 transition shadow-xs flex items-center justify-center space-x-2 text-sm"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span>Continuar com o Google</span>
+            </button>
+
+            <div className="flex items-center my-3">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="px-3 text-xs text-slate-400 uppercase font-medium">ou e-mail</span>
+              <div className="flex-grow border-t border-slate-200"></div>
             </div>
 
             <form onSubmit={handleAuth} className="space-y-3 text-sm">
@@ -312,7 +367,7 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="block font-medium text-slate-700 mb-1">WhatsApp / Celular *</label>
+                      <label className="block font-medium text-slate-700 mb-1">WhatsApp *</label>
                       <input 
                         type="text" 
                         required
@@ -339,11 +394,11 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Criar Senha * (Mín. 6 números)</label>
+                <label className="block font-medium text-slate-700 mb-1">Senha * (Mín. 6 caracteres)</label>
                 <input 
                   type="password" 
                   required
-                  placeholder="Ex: 123456"
+                  placeholder="••••••••"
                   value={authPassword}
                   onChange={e => setAuthPassword(e.target.value)}
                   className="w-full p-2.5 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
@@ -353,13 +408,13 @@ export default function App() {
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-md disabled:opacity-50 flex items-center justify-center space-x-2 mt-4"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-md disabled:opacity-50 flex items-center justify-center space-x-2 mt-2"
               >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <span>{isRegistering ? 'Criar Cadastro e Entrar' : 'Entrar no Aplicativo'}</span>}
               </button>
             </form>
 
-            <div className="text-center pt-3 border-t">
+            <div className="text-center pt-2 border-t">
               <button 
                 type="button"
                 onClick={() => setIsRegistering(!isRegistering)}
@@ -374,7 +429,7 @@ export default function App() {
     );
   }
 
-  // 📱 APLICATIVO LIBERADO (Após o usuário se cadastrar e logar)
+  // 📱 APLICATIVO LIBERADO
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
       <header className="bg-emerald-600 text-white shadow-lg sticky top-0 z-40">
@@ -416,9 +471,9 @@ export default function App() {
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-5 text-white shadow-md flex justify-between items-center">
           <div>
             <span className="text-xs text-emerald-200 font-semibold uppercase tracking-wider">Usuário Conectado</span>
-            <h2 className="text-lg font-bold">Olá, {userProfile?.fullName || 'Protetor(a)'}! 👋</h2>
+            <h2 className="text-lg font-bold">Olá, {userProfile?.fullName || currentUser?.displayName || 'Protetor(a)'}! 👋</h2>
             <p className="text-xs text-emerald-100 mt-0.5">
-              Bairro: <strong>{userProfile?.neighborhood}</strong> • Contato: {userProfile?.phone}
+              Bairro: <strong>{userProfile?.neighborhood || 'Ribeirão das Neves'}</strong> • Contato: {userProfile?.phone || 'Não informado'}
             </p>
           </div>
           <ShieldCheck className="h-10 w-10 text-emerald-200 opacity-80" />
@@ -446,56 +501,4 @@ export default function App() {
               🐶 Adoção Responsável
             </button>
             <button
-              onClick={() => setActiveTab('lost')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'lost' ? 'bg-amber-500 text-white shadow-xs' : 'bg-white text-slate-600 border border-slate-200'
-              }`}
-            >
-              🔍 Animais Perdidos
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {filteredPets.length === 0 ? (
-            <div className="col-span-full text-center py-10 bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-slate-500 text-xs">Nenhum pet encontrado nesta categoria.</p>
-            </div>
-          ) : (
-            filteredPets.map((pet) => {
-              const isMyPet = pet.userId === currentUser.uid;
-
-              return (
-                <div 
-                  key={pet.id} 
-                  className={`rounded-2xl overflow-hidden shadow-xs border transition relative ${
-                    pet.isCompleted ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="relative h-48 w-full bg-slate-100">
-                    <img 
-                      src={pet.image} 
-                      alt={pet.name} 
-                      className={`w-full h-full object-cover ${pet.isCompleted ? 'grayscale opacity-75' : ''}`}
-                    />
-                    
-                    {pet.isCompleted ? (
-                      <span className="absolute top-3 left-3 bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-md">
-                        {pet.status === 'adoption' ? 'JÁ ADOTADO! 🎉' : 'ENCONTRADO! 🎉'}
-                      </span>
-                    ) : (
-                      <span className={`absolute top-3 right-3 text-[10px] font-bold px-2.5 py-1 rounded-full text-white shadow-xs ${
-                        pet.status === 'adoption' ? 'bg-emerald-500' : 'bg-amber-500'
-                      }`}>
-                        {pet.status === 'adoption' ? 'Para Adoção' : 'Perdido'}
-                      </span>
-                    )}
-
-                    {isMyPet && (
-                      <div className="absolute top-3 left-3 flex space-x-1.5">
-                        <button 
-                          onClick={() => handleOpenEditModal(pet)}
-                          title="Editar Anúncio"
-                          className="bg-white/90 hover:bg-emerald-600 hover:text-white text-slate-700 p-1.5 rounded-full shadow-sm transition"
-                        >
-                          <E
+              
